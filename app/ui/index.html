@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Service Status</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 16px; color: #222; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #ddd; }
+    .ok { color: #15803d; font-weight: 600; }
+    .down { color: #b91c1c; font-weight: 600; }
+    button { padding: 6px 14px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Service Status</h1>
+  <p>Auto-refreshes every 5s. <button onclick="refresh()">Refresh now</button></p>
+  <table>
+    <thead><tr><th>Service</th><th>Status</th><th>HTTP</th><th>Latency</th><th>Last checked</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script>
+    const services = ["user", "project", "churn", "notification", "report"];
+
+    async function check(svc) {
+      const start = performance.now();
+      try {
+        const res = await fetch(`/api/${svc}/healthz`, { cache: "no-store" });
+        const body = await res.json().catch(() => ({}));
+        return { svc, ok: res.ok, code: res.status, status: body.status || res.statusText, ms: performance.now() - start };
+      } catch (e) {
+        return { svc, ok: false, code: "-", status: "unreachable", ms: performance.now() - start };
+      }
+    }
+
+    async function refresh() {
+      const results = await Promise.all(services.map(check));
+      const now = new Date().toLocaleTimeString();
+      document.getElementById("rows").innerHTML = results.map(r => `
+        <tr>
+          <td>${r.svc}-api</td>
+          <td class="${r.ok ? "ok" : "down"}">${r.status}</td>
+          <td>${r.code}</td>
+          <td>${r.ms.toFixed(0)} ms</td>
+          <td>${now}</td>
+        </tr>`).join("");
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+</body>
+</html>

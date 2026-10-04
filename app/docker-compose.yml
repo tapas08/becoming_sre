@@ -1,0 +1,61 @@
+x-api: &api
+  environment:
+    DATABASE_URL: postgresql://sre:sre@postgres:5432/app
+  depends_on:
+    postgres:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sre
+      POSTGRES_PASSWORD: sre
+      POSTGRES_DB: app
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sre -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  user-api:
+    <<: *api
+    build: ./user
+    ports: ["8001:8080"]
+
+  project-api:
+    <<: *api
+    build: ./project
+    ports: ["8002:8080"]
+
+  churn-api:
+    <<: *api
+    build: ./churn
+    ports: ["8003:8080"]
+    environment:
+      DATABASE_URL: postgresql://sre:sre@postgres:5432/app
+      NOTIFICATION_URL: http://notification-api:8080
+
+  notification-api:
+    <<: *api
+    build: ./notification
+    ports: ["8004:8080"]
+
+  report-api:
+    <<: *api
+    build: ./report
+    ports: ["8005:8080"]
+
+  ui:
+    build: ./ui
+    ports: ["3000:80"]
+    restart: unless-stopped
+
+volumes:
+  pgdata:

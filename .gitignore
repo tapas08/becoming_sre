@@ -1,0 +1,9 @@
+# Folders to ignore
+__pycache__/
+venv/
+DS_Store/
+.node_modules/
+
+# Files to ignore
+*.pyc
+.env

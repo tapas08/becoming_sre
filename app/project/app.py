@@ -1,15 +1,30 @@
 import os
-
+import time
 import psycopg
+
 from fastapi import FastAPI, HTTPException, Response
 from psycopg.rows import dict_row
 from pydantic import BaseModel
+from prometheus_client import Counter, Histogram, make_asgi_app
 
 SERVICE = "project-api"
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://sre:sre@localhost:5432/app")
 
 app = FastAPI(title=SERVICE)
+metrics_app = make_asgi_app()
 
+REQUESTS = Counter(
+    "http_requests_total",
+    "HTTP requests",
+    ["service", "method", "route", "code"],
+)
+
+LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "Request latency",
+    ["service", "method", "route"],
+    buckets=(0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1.0, 2.0, 5.0),
+)
 
 class ProjectIn(BaseModel):
     project_name: str
@@ -49,3 +64,21 @@ def get_project(project_id: int) -> dict:
     if not row:
         raise HTTPException(status_code=404, detail="Project not found")
     return {"msg": "Project found", "data": row}
+
+
+
+app.mount("/metrics", metrics_app)
+
+# App middleware to track requests and latency
+@app.middleware("http")
+async def track_requests(request, call_next):
+    route = request.url.path
+    method = request.method
+    if route == "/metrics":
+        return await call_next(request)
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    elapsed_time = time.perf_counter() - start_time
+    REQUESTS.labels(service=SERVICE, method=method, route=route, code=str(response.status_code)).inc()
+    LATENCY.labels(service=SERVICE, method=method, route=route).observe(elapsed_time)
+    return response

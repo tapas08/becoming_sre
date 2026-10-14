@@ -2,19 +2,34 @@ import json
 import os
 import random
 import statistics
+import time
 import urllib.request
-
 import psycopg
+
 from fastapi import FastAPI, HTTPException, Query, Response
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
+from prometheus_client import Counter, Histogram, make_asgi_app
 
 SERVICE = "churn-api"
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://sre:sre@localhost:5432/app")
 NOTIFICATION_URL = os.getenv("NOTIFICATION_URL", "http://localhost:8080")
 
 app = FastAPI(title=SERVICE)
+metrics_app = make_asgi_app()
 
+REQUESTS = Counter(
+    "http_requests_total",
+    "HTTP requests",
+    ["service", "method", "route", "code"],
+)
+
+LATENCY = Histogram(
+    "http_request_duration_seconds",
+    "Request latency",
+    ["service", "method", "route"],
+    buckets=(0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1.0, 2.0, 5.0),
+)
 
 def db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row, connect_timeout=2)
@@ -64,3 +79,20 @@ def churn(project_id: int, rows: int = Query(100_000, ge=1, le=5_000_000)) -> di
 
     notify(f"Churn finished for project {project_id}: {rows} rows processed")
     return {"msg": "Churn complete", "data": row}
+
+
+app.mount("/metrics", metrics_app)
+
+# App middleware to track requests and latency
+@app.middleware("http")
+async def track_requests(request, call_next):
+    route = request.url.path
+    method = request.method
+    if route == "/metrics":
+        return await call_next(request)
+    start_time = time.perf_counter()
+    response = await call_next(request)
+    elapsed_time = time.perf_counter() - start_time
+    REQUESTS.labels(service=SERVICE, method=method, route=route, code=str(response.status_code)).inc()
+    LATENCY.labels(service=SERVICE, method=method, route=route).observe(elapsed_time)
+    return response

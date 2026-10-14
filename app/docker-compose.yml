@@ -5,10 +5,13 @@ x-api: &api
     postgres:
       condition: service_healthy
   restart: unless-stopped
+  networks:
+    - besrenet
 
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: postgres
     environment:
       POSTGRES_USER: sre
       POSTGRES_PASSWORD: sre
@@ -23,19 +26,24 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - besrenet
 
   user-api:
     <<: *api
+    container_name: user-api
     build: ./user
     ports: ["8001:8080"]
 
   project-api:
     <<: *api
+    container_name: project-api
     build: ./project
     ports: ["8002:8080"]
 
   churn-api:
     <<: *api
+    container_name: churn-api
     build: ./churn
     ports: ["8003:8080"]
     environment:
@@ -44,18 +52,26 @@ services:
 
   notification-api:
     <<: *api
+    container_name: notification-api
     build: ./notification
     ports: ["8004:8080"]
 
   report-api:
     <<: *api
+    container_name: report-api
     build: ./report
     ports: ["8005:8080"]
 
   ui:
+    container_name: ui
     build: ./ui
     ports: ["3000:80"]
     restart: unless-stopped
+    networks:
+      - besrenet
 
 volumes:
   pgdata:
+
+networks:
+  besrenet:

@@ -1,0 +1,28 @@
+global:
+  scrape_interval: 1m   # Scrape metrics from targets
+
+scrape_configs:
+- job_name: 'prometheus'
+  static_configs:
+    - targets:
+      - localhost:9090
+- job_name: 'user'
+  static_configs:
+    - targets:
+      - user-api:8080
+- job_name: 'project'
+  static_configs:
+    - targets:
+      - project-api:8080
+- job_name: 'churn'
+  static_configs:
+    - targets:
+      - churn-api:8080
+- job_name: 'notification'
+  static_configs:
+    - targets:
+      - notification-api:8080
+- job_name: 'report'
+  static_configs:
+    - targets:
+      - report-api:8080

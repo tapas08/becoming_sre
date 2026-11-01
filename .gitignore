@@ -3,7 +3,11 @@ __pycache__/
 venv/
 DS_Store/
 .node_modules/
+.terraform/
 
 # Files to ignore
 *.pyc
 .env
+*.tfstate
+*.tfstate.*
+tfplan
